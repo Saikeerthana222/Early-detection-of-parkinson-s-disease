@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,11 +11,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress';
-import { Brain, ArrowLeft, ArrowRight, Upload, X, Check, AlertTriangle, Info, Loader2 } from 'lucide-react';
+import { Brain, ArrowLeft, ArrowRight, Upload, X, Check, AlertTriangle, Info, Loader2, Server, ExternalLink } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { getAgeWarning, type PatientInfo, predictParkinsons, checkHealth } from '@/lib/api';
+import { getAgeWarning, type PatientInfo, predictParkinsons, checkHealth, type HealthStatus } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 
 const DRAWING_TASKS = [
@@ -37,6 +37,8 @@ const AssessmentPage = () => {
   const { toast } = useToast();
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [backendStatus, setBackendStatus] = useState<HealthStatus | null>(null);
+  const [isCheckingBackend, setIsCheckingBackend] = useState(true);
   
   // Patient info state
   const [patientInfo, setPatientInfo] = useState<PatientInfo>({
@@ -55,6 +57,22 @@ const AssessmentPage = () => {
   const [errors, setErrors] = useState<Record<string, string>>({});
   
   const ageWarning = patientInfo.age > 0 ? getAgeWarning(patientInfo.age) : null;
+
+  // Check backend status on mount
+  useEffect(() => {
+    const checkBackend = async () => {
+      setIsCheckingBackend(true);
+      const status = await checkHealth();
+      setBackendStatus(status);
+      setIsCheckingBackend(false);
+    };
+    
+    checkBackend();
+    
+    // Recheck every 30 seconds
+    const interval = setInterval(checkBackend, 30000);
+    return () => clearInterval(interval);
+  }, []);
   
   const validateStep1 = () => {
     const newErrors: Record<string, string> = {};
@@ -149,6 +167,7 @@ const AssessmentPage = () => {
   };
   
   const canAnalyze = uploadedImages.length === 5;
+  const isBackendReady = backendStatus?.status === 'healthy' && backendStatus?.model_loaded;
   
   const handleAnalyze = async () => {
     if (!canAnalyze) return;
@@ -159,10 +178,20 @@ const AssessmentPage = () => {
       // Check backend health first
       const health = await checkHealth();
       
-      if (health.status !== 'healthy' || !health.model_loaded) {
+      if (health.status !== 'healthy') {
         toast({
           title: 'Backend Not Available',
-          description: 'The analysis server is not running. Please ensure the backend is started.',
+          description: 'The analysis server is not running. Please start the backend server.',
+          variant: 'destructive',
+        });
+        setIsSubmitting(false);
+        return;
+      }
+      
+      if (!health.model_loaded) {
+        toast({
+          title: 'Model Not Loaded',
+          description: 'The ML model is not loaded on the server. Please upload the model file.',
           variant: 'destructive',
         });
         setIsSubmitting(false);
@@ -187,6 +216,13 @@ const AssessmentPage = () => {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleRetryBackendCheck = async () => {
+    setIsCheckingBackend(true);
+    const status = await checkHealth();
+    setBackendStatus(status);
+    setIsCheckingBackend(false);
   };
   
   return (
@@ -236,6 +272,58 @@ const AssessmentPage = () => {
           </Button>
         </div>
       </header>
+
+      {/* Backend Status Banner */}
+      {!isCheckingBackend && !isBackendReady && (
+        <div className="bg-destructive/10 border-b border-destructive/20">
+          <div className="container py-4">
+            <Alert variant="destructive" className="bg-transparent border-none p-0">
+              <Server className="h-4 w-4" />
+              <AlertTitle className="mb-1">Backend Server Not Connected</AlertTitle>
+              <AlertDescription className="space-y-2">
+                <p>
+                  The analysis server is not running. To perform assessments, you need to start the Flask backend server.
+                </p>
+                <div className="flex flex-wrap items-center gap-2 mt-3">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={handleRetryBackendCheck}
+                    disabled={isCheckingBackend}
+                    className="gap-2"
+                  >
+                    {isCheckingBackend ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+                    Retry Connection
+                  </Button>
+                  <a 
+                    href="https://github.com" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+                  >
+                    <ExternalLink className="h-3 w-3" />
+                    View Setup Guide
+                  </a>
+                </div>
+                <div className="mt-3 p-3 bg-muted/50 rounded-lg text-xs font-mono">
+                  <p className="text-muted-foreground mb-1">Quick Start:</p>
+                  <code>cd backend && python app.py</code>
+                </div>
+              </AlertDescription>
+            </Alert>
+          </div>
+        </div>
+      )}
+
+      {/* Backend Status Indicator (when connected) */}
+      {!isCheckingBackend && isBackendReady && (
+        <div className="bg-success/10 border-b border-success/20">
+          <div className="container py-2 flex items-center gap-2 text-success text-sm">
+            <div className="w-2 h-2 rounded-full bg-success animate-pulse" />
+            Backend connected • Model loaded
+          </div>
+        </div>
+      )}
       
       <main className="container py-8 md:py-12">
         {/* Step 1: Patient Information */}
@@ -499,10 +587,10 @@ const AssessmentPage = () => {
               
               <Button 
                 onClick={handleAnalyze} 
-                disabled={!canAnalyze || isSubmitting}
+                disabled={!canAnalyze || isSubmitting || !isBackendReady}
                 className={cn(
                   "gap-2 w-full sm:w-auto",
-                  canAnalyze && !isSubmitting && "animate-pulse"
+                  canAnalyze && !isSubmitting && isBackendReady && "animate-pulse"
                 )}
                 size="lg"
               >
@@ -523,6 +611,12 @@ const AssessmentPage = () => {
             {!canAnalyze && (
               <p className="text-center text-sm text-muted-foreground mt-4">
                 Please upload all 5 images to continue
+              </p>
+            )}
+            
+            {canAnalyze && !isBackendReady && (
+              <p className="text-center text-sm text-destructive mt-4">
+                Backend server required for analysis. Please start the server first.
               </p>
             )}
           </div>
