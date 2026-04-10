@@ -72,8 +72,8 @@ Publishing and Printing Journal (UGC Care Approved)
 **Author:** Palla Saikeerthana  
 **Paper ID:** PPJ/2052  
 
-📄 [View Paper](docs/paper.pdf)  
-🏆 [View Certificate](docs/publication-certificate.png)
+📄 [View Paper](docs/Paper.pdf)  
+🏆 [View Certificate](docs/Publication-certificate.png)
 
 ## Author
 
