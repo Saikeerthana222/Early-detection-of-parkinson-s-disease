@@ -77,4 +77,4 @@ Publishing and Printing Journal (UGC Care Approved)
 
 ## Author
 
-Saikeerthana
+ Palla Saikeerthana
