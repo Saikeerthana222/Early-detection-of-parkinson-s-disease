@@ -1,0 +1,24 @@
+__pycache__/
+*.py[cod]
+*.so
+.Python
+env/
+venv/
+*.egg-info/
+dist/
+build/
+
+# Model files (upload manually)
+models/*.keras
+models/*.h5
+
+# Uploads
+uploads/*
+!uploads/.gitkeep
+
+# Environment
+.env
+.env.local
+
+# Logs
+*.log

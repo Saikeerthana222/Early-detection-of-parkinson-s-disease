@@ -1,95 +1,3 @@
-# Parkinson's Disease Detection System - Backend Integration Guide
-
-## 📋 Table of Contents
-1. [Overview](#overview)
-2. [Architecture](#architecture)
-3. [Backend Setup](#backend-setup)
-4. [API Endpoints](#api-endpoints)
-5. [Frontend Configuration](#frontend-configuration)
-6. [Model Integration](#model-integration)
-7. [Testing](#testing)
-8. [Deployment](#deployment)
-9. [Troubleshooting](#troubleshooting)
-
----
-
-## Overview
-
-This application uses a **React frontend** that communicates with a **Python Flask backend** for Parkinson's Disease detection through handwriting analysis.
-
-### Technology Stack
-- **Frontend**: React + TypeScript + Vite (hosted on  )
-- **Backend**: Python Flask + TensorFlow
-- **ML Model**: VGG16 fine-tuned Keras model
-
-### Communication Flow
-```
-┌─────────────────┐         ┌─────────────────┐         ┌─────────────────┐
-│                 │         │                 │         │                 │
-│  React Frontend │ ──────► │   Flask API     │ ──────► │  TensorFlow     │
-│  ( )      │  HTTP   │  (Your Server)  │         │  Model          │
-│                 │ ◄────── │                 │ ◄────── │                 │
-└─────────────────┘         └─────────────────┘         └─────────────────┘
-```
-
----
-
-## Architecture
-
-### Frontend Files (Already Created)
-| File | Purpose |
-|------|---------|
-| `src/lib/api.ts` | API client with all backend communication functions |
-| `src/pages/AssessmentPage.tsx` | Handles image uploads and calls prediction API |
-| `src/pages/ResultsPage.tsx` | Displays results from backend |
-
-### Backend Files (You Need to Create)
-```
-backend/
-├── models/
-│   ├── .gitkeep
-│   └── vgg16_parkinson_finetuned.keras    ← YOUR MODEL FILE
-├── uploads/
-│   └── .gitkeep 
-├── app.py                                  ← Main Flask application
-├── requirements.txt                        ← Python dependencies
-├── verify_setup.py                         ← Setup verification script
-├── README.md                               ← Backend documentation
-├── .gitignore
-└── .env.example
-```
-
----
-
-## Backend Setup
-
-### Step 1: Create Backend Directory Structure
-
-Create a new folder called `backend` on your local machine or server:
-
-```bash
-mkdir backend
-cd backend
-mkdir models uploads
-touch models/.gitkeep uploads/.gitkeep
-```
-
-### Step 2: Create requirements.txt
-
-```txt
-flask==3.0.0
-flask-cors==4.0.0
-tensorflow==2.15.0
-pillow==10.1.0
-numpy==1.24.3
-python-multipart==0.0.6
-werkzeug==3.0.0
-python-dotenv==1.0.0
-```
-
-### Step 3: Create app.py
-
-```python
 import os
 import sys
 from pathlib import Path
@@ -98,18 +6,17 @@ from flask_cors import CORS
 import tensorflow as tf
 import numpy as np
 from PIL import Image
+import cv2  # Added for preprocessing that matches training
 import io
 from datetime import datetime
 
 app = Flask(__name__)
 
 # CORS Configuration - IMPORTANT!
-# Allow requests from your   frontend
+# Allow requests from your Lovable frontend
 CORS(app, origins=[
-    "http://localhost:5173",
+    "http://localhost:8080",
     "http://localhost:3000",
-    "https://*. project.com",
-    "https://*. .app",
     "*"  # For development - restrict in production
 ])
 
@@ -137,34 +44,55 @@ else:
     print("  Server will run but predictions will fail until model is uploaded.")
 
 # ============================================================================
-# IMAGE PREPROCESSING
+# IMAGE PREPROCESSING - UPDATED TO MATCH TRAINING
 # ============================================================================
 
 def preprocess_image(image_file):
     """
-    Preprocess image for VGG16 model
+    Preprocess image for VGG16 model - MATCHES TRAINING PREPROCESSING EXACTLY
+    
+    Training preprocessing (from notebook):
+    1. cv2.imread(GRAYSCALE)
+    2. cv2.resize(100, 100)
+    3. reshape(-1, 100, 100, 1)
+    4. normalize / 255.0
+    5. np.repeat (grayscale -> 3 channels)
+    
     Input: File object
     Output: Numpy array (1, 100, 100, 3) normalized to [0, 1]
     """
     try:
+        # Read image bytes from uploaded file
         if hasattr(image_file, 'stream'):
-            image = Image.open(image_file.stream)
+            image_bytes = image_file.stream.read()
+            image_file.stream.seek(0)  # Reset stream for potential re-reading
         else:
-            image = Image.open(image_file)
+            image_bytes = image_file.read()
         
-        # Convert to RGB
-        image = image.convert('RGB')
+        # Convert bytes to numpy array
+        nparr = np.frombuffer(image_bytes, np.uint8)
         
-        # Resize to 100x100 (model input size)
-        image = image.resize((100, 100), Image.Resampling.LANCZOS)
+        # Decode image using OpenCV as GRAYSCALE (matches training)
+        img = cv2.imdecode(nparr, cv2.IMREAD_GRAYSCALE)
         
-        # Normalize to [0, 1]
-        image_array = np.array(image, dtype=np.float32) / 255.0
+        if img is None:
+            raise ValueError("Could not decode image")
         
-        # Add batch dimension
-        image_array = np.expand_dims(image_array, axis=0)
+        # Resize to 100x100 using OpenCV (matches training)
+        resized_img = cv2.resize(img, (100, 100))
         
-        return image_array
+        # Reshape to add channel dimension: (100, 100) -> (1, 100, 100, 1)
+        img_with_channel = resized_img.reshape(1, 100, 100, 1)
+        
+        # Normalize pixel values to [0, 1] (matches training)
+        normalized_img = img_with_channel / 255.0
+        
+        # Convert grayscale to 3 channels for VGG16 (matches training)
+        # np.repeat along axis=-1 (channel axis)
+        img_3_channel = np.repeat(normalized_img, 3, axis=-1)
+        
+        return img_3_channel
+        
     except Exception as e:
         raise ValueError(f"Error preprocessing image: {str(e)}")
 
@@ -251,7 +179,7 @@ def health():
     return jsonify({
         'status': 'healthy',
         'model_loaded': model is not None,
-        'version': '1.0.0'
+        'version': '2.0.0'  # Updated version with fixed preprocessing
     })
 
 @app.route('/api/model-status', methods=['GET'])
@@ -312,19 +240,28 @@ def predict():
         
         task_types = [
             "Clockwise Spiral",
-            "Counterclockwise Spiral",
-            "Handwriting Sample",
-            "Dot Connection",
-            "Signature"
+            "Clockwise Spiral",
+            "Wave Pattern",
+            "Wave Pattern",
+            "Wave Pattern"
         ]
+        
+        print("\n" + "=" * 60)
+        print("PROCESSING IMAGES")
+        print("=" * 60)
         
         for idx, image_file in enumerate(images):
             processed_image = preprocess_image(image_file)
+            print(f"Image {idx+1} ({task_types[idx]}): shape={processed_image.shape}")
+            
             prediction = model.predict(processed_image, verbose=0)[0]
             predictions.append(prediction)
             
             pd_probability = float(prediction[1])
             pd_percentage = round(pd_probability * 100, 2)
+            
+            print(f"  Prediction: Healthy={prediction[0]:.4f}, Parkinson={prediction[1]:.4f}")
+            print(f"  Risk Score: {pd_percentage}%")
             
             individual_scores.append({
                 'imageId': idx + 1,
@@ -332,6 +269,8 @@ def predict():
                 'score': pd_percentage,
                 'notes': generate_image_note(pd_percentage, task_types[idx])
             })
+        
+        print("=" * 60 + "\n")
         
         # Calculate overall risk
         overall_risk, risk_level, age_adjusted, age_context = aggregate_predictions(
@@ -393,7 +332,12 @@ def predict():
 
 if __name__ == '__main__':
     print("\n" + "=" * 60)
-    print("Parkinson's Detection System - Backend Server")
+    print("Parkinson's Detection System - Backend Server v2.0")
+    print("=" * 60)
+    print("Updates:")
+    print("  • Image preprocessing matches training exactly")
+    print("  • OpenCV grayscale → 3-channel conversion")
+    print("  • Supports both spiral and wave images")
     print("=" * 60)
     
     if model is None:
@@ -406,301 +350,3 @@ if __name__ == '__main__':
     print("=" * 60 + "\n")
     
     app.run(host='0.0.0.0', port=5000, debug=True)
-```
-
-### Step 4: Create verify_setup.py
-
-```python
-#!/usr/bin/env python3
-"""Verify backend setup before starting server"""
-
-import os
-import sys
-from pathlib import Path
-
-def verify_setup():
-    print("\n" + "=" * 60)
-    print("Parkinson's Detection System - Setup Verification")
-    print("=" * 60 + "\n")
-    
-    errors = []
-    warnings = []
-    
-    # Check model file
-    model_path = Path(__file__).parent / 'models' / 'vgg16_parkinson_finetuned.keras'
-    if not model_path.exists():
-        errors.append(f"❌ Model file not found: {model_path}")
-        errors.append("   ACTION: Upload 'vgg16_parkinson_finetuned.keras' to backend/models/")
-    else:
-        size_mb = model_path.stat().st_size / (1024 * 1024)
-        print(f"✓ Model file found ({size_mb:.2f} MB)")
-    
-    # Check dependencies
-    try:
-        import tensorflow as tf
-        print(f"✓ TensorFlow: {tf.__version__}")
-    except ImportError:
-        errors.append("❌ TensorFlow not installed")
-    
-    try:
-        import flask
-        print(f"✓ Flask: {flask.__version__}")
-    except ImportError:
-        errors.append("❌ Flask not installed")
-    
-    try:
-        from PIL import Image
-        print(f"✓ Pillow installed")
-    except ImportError:
-        errors.append("❌ Pillow not installed")
-    
-    # Print results
-    print("\n" + "=" * 60)
-    
-    if errors:
-        print("❌ ERRORS - Fix before running:")
-        for error in errors:
-            print(error)
-        sys.exit(1)
-    
-    print("✓ ALL CHECKS PASSED!")
-    print("Run: python app.py")
-
-if __name__ == '__main__':
-    verify_setup()
-```
-
-### Step 5: Create .gitignore
-
-```
-__pycache__/
-*.py[cod]
-*.so
-.Python
-env/
-venv/
-*.egg-info/
-dist/
-build/
-
-# Model files (upload manually)
-models/*.keras
-models/*.h5
-
-# Uploads
-uploads/*
-!uploads/.gitkeep
-
-# Environment
-.env
-.env.local
-
-# Logs
-*.log
-```
-
-### Step 6: Create .env.example
-
-```
-# Backend Configuration
-FLASK_ENV=development
-FLASK_DEBUG=1
-PORT=5000
-
-# CORS Origins (comma-separated)
-ALLOWED_ORIGINS=http://localhost:5173,https://your-project. .app
-```
-
----
-
-## API Endpoints
-
-### 1. Health Check
-```
-GET /api/health
-
-Response:
-{
-  "status": "healthy",
-  "model_loaded": true,
-  "version": "1.0.0"
-}
-```
-
-### 2. Model Status
-```
-GET /api/model-status
-
-Response:
-{
-  "loaded": true,
-  "model_path": "/path/to/model",
-  "input_shape": "(None, 100, 100, 3)",
-  "output_shape": "(None, 2)",
-  "total_params": 42443720
-}
-```
-
-### 3. Predict
-```
-POST /api/predict
-Content-Type: multipart/form-data
-
-Form Data:
-- images: File[] (exactly 5 images)
-- age: number (18-100)
-- gender: string
-- handedness: string
-- medicalHistory: boolean
-- familyHistory: boolean
-
-Response:
-{
-  "success": true,
-  "overallRisk": 45.5,
-  "riskLevel": "moderate",
-  "confidence": 85.2,
-  "individualScores": [...],
-  "detailedMetrics": {...},
-  "ageAdjusted": false,
-  "ageContext": "Standard age-appropriate analysis",
-  "recommendations": [...],
-  "timestamp": "2024-01-15T10:30:00Z",
-  "patientInfo": {...}
-}
-```
-
----
-
-## Frontend Configuration
-
-### Current Setup (src/lib/api.ts)
-
-The frontend is configured to connect to:
-```typescript
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-```
-
-### Option 1: Local Development (Default)
-No changes needed. The frontend will connect to `http://localhost:5000/api`
-
-### Option 2: Custom Backend URL
-Create a `.env` file in the frontend root (if deploying backend elsewhere):
-
-```env
-VITE_API_URL=https://your-backend-server.com/api
-```
-
----
-
-## Model Integration
-
-### Model Specifications
-| Property | Value |
-|----------|-------|
-| File Name | `vgg16_parkinson_finetuned.keras` |
-| Input Shape | (None, 100, 100, 3) |
-| Output Shape | (None, 2) |
-| Classes | [Healthy, Parkinson's] |
-| Expected Size | ~162 MB |
-
-### Upload Location
-Place your model file at:
-```
-backend/models/vgg16_parkinson_finetuned.keras
-```
-
----
-
-## Testing
-
-### Step 1: Start Backend
-```bash
-cd backend
-pip install -r requirements.txt
-python verify_setup.py  # Check everything is ready
-python app.py           # Start server
-```
-
-### Step 2: Test Health Endpoint
-```bash
-curl http://localhost:5000/api/health
-```
-
-Expected response:
-```json
-{"status": "healthy", "model_loaded": true, "version": "1.0.0"}
-```
-
-### Step 3: Test from Frontend
-Open your   app and navigate to the Assessment page.
-
----
-
-## Deployment
-
-### For Production
-
-1. **Backend Hosting Options:**
-   - AWS EC2 / Lambda
-   - Google Cloud Run
-   - Heroku
-   - Railway
-   - DigitalOcean
-
-2. **Update Frontend Environment:**
-   Add to your   project secrets:
-   ```
-   VITE_API_URL=https://your-production-backend.com/api
-   ```
-
-3. **CORS Configuration:**
-   Update `app.py` to only allow your production domain:
-   ```python
-   CORS(app, origins=[
-       "https://your-project. .app"
-   ])
-   ```
-
----
-
-## Troubleshooting
-
-### Error: "Backend Not Available"
-- **Cause**: Backend server is not running
-- **Fix**: Start the Flask server: `python app.py`
-
-### Error: "Model not loaded"
-- **Cause**: Model file missing
-- **Fix**: Upload `vgg16_parkinson_finetuned.keras` to `backend/models/`
-
-### Error: CORS Issues
-- **Cause**: Backend not allowing frontend origin
-- **Fix**: Update CORS configuration in `app.py`
-
-### Error: TensorFlow Version Mismatch
-- **Cause**: Model saved with different TensorFlow version
-- **Fix**: Install matching version: `pip install tensorflow==2.15.0`
-
----
-
-## Quick Start Checklist
-
-- [ ] Create `backend/` directory
-- [ ] Create all files (app.py, requirements.txt, etc.)
-- [ ] Run `pip install -r requirements.txt`
-- [ ] Upload your `.keras` model to `backend/models/`
-- [ ] Run `python verify_setup.py`
-- [ ] Start server with `python app.py`
-- [ ] Test with `curl http://localhost:5000/api/health`
-- [ ] Open frontend and complete an assessment
-
----
-
-## Support
-
-For issues with:
-- **Frontend**: Check browser console for errors
-- **Backend**: Check terminal output for Python errors
-- **Model**: Ensure TensorFlow version compatibility
-- **Network**: Verify CORS settings and firewall rules

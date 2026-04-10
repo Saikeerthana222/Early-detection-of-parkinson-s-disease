@@ -20,10 +20,10 @@ import { useToast } from '@/hooks/use-toast';
 
 const DRAWING_TASKS = [
   { id: 1, name: 'Clockwise Spiral', description: 'Draw a spiral starting from the center, moving clockwise' },
-  { id: 2, name: 'Counterclockwise Spiral', description: 'Draw a spiral starting from the center, moving counterclockwise' },
-  { id: 3, name: 'Handwriting Sample', description: 'Write: "The quick brown fox jumps"' },
-  { id: 4, name: 'Dot Connection', description: 'Connect dots in sequence (draw lines between numbered points)' },
-  { id: 5, name: 'Signature', description: 'Write your signature naturally' },
+  { id: 2, name: 'Clockwise Spiral', description: 'Draw a spiral starting from the center, moving clockwise' },
+  { id: 3, name: 'Wave Pattern', description: 'Draw a smooth wave-like pattern moving horizontally like a sine wave' },
+  { id: 4, name: 'Wave Pattern', description: 'Draw a smooth wave-like pattern moving horizontally like a sine wave' },
+  { id: 5, name: 'Wave Pattern', description: 'Draw a smooth wave-like pattern moving horizontally like a sine wave' },
 ];
 
 interface UploadedImage {
@@ -274,7 +274,7 @@ const AssessmentPage = () => {
       </header>
 
       {/* Backend Status Banner */}
-      {!isCheckingBackend && !isBackendReady && (
+      {/* {!isCheckingBackend && !isBackendReady && (
         <div className="bg-destructive/10 border-b border-destructive/20">
           <div className="container py-4">
             <Alert variant="destructive" className="bg-transparent border-none p-0">
@@ -313,17 +313,17 @@ const AssessmentPage = () => {
             </Alert>
           </div>
         </div>
-      )}
+      )} */}
 
       {/* Backend Status Indicator (when connected) */}
-      {!isCheckingBackend && isBackendReady && (
+      {/* {!isCheckingBackend && isBackendReady && (
         <div className="bg-success/10 border-b border-success/20">
           <div className="container py-2 flex items-center gap-2 text-success text-sm">
             <div className="w-2 h-2 rounded-full bg-success animate-pulse" />
             Backend connected • Model loaded
           </div>
         </div>
-      )}
+      )} */}
       
       <main className="container py-8 md:py-12">
         {/* Step 1: Patient Information */}
