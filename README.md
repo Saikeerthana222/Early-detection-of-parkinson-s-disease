@@ -58,6 +58,22 @@ npm run dev
 View all screenshots here:  
 [View Screenshots](screenshots/README.md)
 
+## Team Members
+- Palla Saikeerthana (Project Lead, Frontend, Integration)
+- Madira Gowtham (Model Training)
+- Kotra Manjusha (Dataset & Preprocessing)
+- Juturu Sai Vivek (Documentation)
+  
+## 📚 Research Publication
+
+**Parkinson's Early Detection Using CNN & VGG16 Deep Learning Models**  
+Publishing and Printing Journal (UGC Care Approved)
+
+**Author:** Palla Saikeerthana  
+**Paper ID:** PPJ/2052  
+
+📄 [View Paper](docs/paper.pdf)  
+🏆 [View Certificate](docs/publication-certificate.png)
 
 ## Author
 
