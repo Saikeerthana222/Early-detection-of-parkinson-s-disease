@@ -54,6 +54,11 @@ npm run dev
 * Patient dashboard
 * Doctor integration
 
+## Screenshots
+View all screenshots here:  
+[screenshots](screenshots/readme.md)
+
+
 ## Author
 
 Saikeerthana
