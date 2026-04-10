@@ -56,7 +56,7 @@ npm run dev
 
 ## Screenshots
 View all screenshots here:  
-[screenshots](screenshots/readme.md)
+[screenshots](readme.md)
 
 
 ## Author
